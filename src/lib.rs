@@ -1,4 +1,5 @@
 mod domain;
 pub use domain::Domain;
 
-pub mod domain_filter;
+mod domain_filter;
+pub use domain_filter::{DomainFilter, DomainFilterBuilder};
