@@ -113,13 +113,3 @@ fn iter_parent_domains() {
         domain.iter_parent_domains().collect::<Vec<Domain>>()
     )
 }
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-
