@@ -109,12 +109,9 @@ impl DomainFilterBuilder {
             disallow_ips: self.disallow_ips,
             allow_ip_net: self.allow_ip_net.into_iter().collect(),
             disallow_ip_net: self.disallow_ip_net.into_iter().collect(),
-            adblock: adblock::engine::Engine::from_rules_parametrised(
+            adblock: adblock::engine::Engine::from_rules(
                 &self.adblock.into_iter().collect::<Vec<String>>(),
-                true,  // Network filters
-                false, // Cosmetic filter
-                false, // Debug mode
-                true, // Optimise, enabling increases total program performance by ~10% but uses ~200MB
+                adblock::lists::FilterFormat::Standard,
             ),
             allow_regex: regex::RegexSet::new(&self.allow_regex).unwrap(),
             disallow_regex: regex::RegexSet::new(&self.disallow_regex).unwrap(),
