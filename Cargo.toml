@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = ["Alex Williams <mkb2191@protonmail.com>"]
 edition = "2018"
 repository = "https://github.com/mkb2091/blockconvert_crate"
-license = "GPLv3"
+license = "GPL-3.0"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
