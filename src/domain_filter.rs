@@ -1,13 +1,13 @@
-use crate::Domain;
+use crate::{Domain, DomainSet};
 
 use std::collections::HashSet;
 
 #[derive(Default)]
 pub struct DomainFilterBuilder {
-    allow_domains: HashSet<Domain>,
-    disallow_domains: HashSet<Domain>,
-    allow_subdomains: HashSet<Domain>,
-    disallow_subdomains: HashSet<Domain>,
+    allow_domains: DomainSet,
+    disallow_domains: DomainSet,
+    allow_subdomains: DomainSet,
+    disallow_subdomains: DomainSet,
     allow_ips: HashSet<std::net::IpAddr>,
     disallow_ips: HashSet<std::net::IpAddr>,
     allow_ip_net: HashSet<ipnet::IpNet>,
@@ -128,7 +128,7 @@ impl DomainFilterBuilder {
     }
 }
 
-fn is_subdomain_of_list(domain: &Domain, filter_list: &std::collections::HashSet<Domain>) -> bool {
+fn is_subdomain_of_list(domain: &Domain, filter_list: &DomainSet) -> bool {
     domain
         .iter_parent_domains()
         .any(|part| filter_list.contains(&part))
@@ -136,10 +136,10 @@ fn is_subdomain_of_list(domain: &Domain, filter_list: &std::collections::HashSet
 
 #[allow(dead_code)]
 pub struct DomainFilter {
-    allow_domains: HashSet<Domain>,
-    disallow_domains: HashSet<Domain>,
-    allow_subdomains: HashSet<Domain>,
-    disallow_subdomains: HashSet<Domain>,
+    allow_domains: DomainSet,
+    disallow_domains: DomainSet,
+    allow_subdomains: DomainSet,
+    disallow_subdomains: DomainSet,
     allow_ips: HashSet<std::net::IpAddr>,
     disallow_ips: HashSet<std::net::IpAddr>,
     allow_ip_net: Vec<ipnet::IpNet>,

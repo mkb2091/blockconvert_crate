@@ -67,7 +67,7 @@ trait DomainSetSingle {
     fn remove(&mut self, domain: &[u8]) -> bool;
     fn iter(&self) -> Box<dyn Iterator<Item = Domain> + '_>;
     fn drain(&mut self) -> Box<dyn Iterator<Item = Domain> + '_>;
-    //fn drain(&self) -> impl iterator;
+    fn shrink_to_fit(&mut self);
 }
 
 macro_rules! implement_domain_set_single {
@@ -95,12 +95,15 @@ macro_rules! implement_domain_set_single {
                         .map(|domain| Domain(domain.to_string().into_boxed_str()))
                 }))
             }
-			fn drain(&mut self) -> Box<dyn Iterator<Item = Domain> + '_> {
+            fn drain(&mut self) -> Box<dyn Iterator<Item = Domain> + '_> {
                 Box::new(self.drain().flat_map(|domain| {
                     std::str::from_utf8(&domain)
                         .ok()
                         .map(|domain| Domain(domain.to_string().into_boxed_str()))
                 }))
+            }
+            fn shrink_to_fit(&mut self) {
+                self.shrink_to_fit()
             }
         }
     };
@@ -369,9 +372,9 @@ pub struct DomainSet {
 }
 
 impl Default for DomainSet {
-	fn default() -> Self {
-		Self::new()
-	}
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DomainSet {
@@ -644,15 +647,25 @@ impl DomainSet {
         let domain_bytes = domain.as_bytes();
         self.sub_sets[domain_bytes.len()].insert(&domain_bytes)
     }
+    pub fn remove(&mut self, domain: &Domain) -> bool {
+        let domain_bytes = domain.as_bytes();
+        self.sub_sets[domain_bytes.len()].remove(&domain_bytes)
+    }
     pub fn iter(&self) -> impl Iterator<Item = Domain> + '_ {
         self.sub_sets.iter().flat_map(|sub_set| sub_set.iter())
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = Domain> + '_{
+    pub fn drain(&mut self) -> impl Iterator<Item = Domain> + '_ {
         self.sub_sets
             .iter_mut()
             .rev()
             .flat_map(|sub_set| sub_set.drain())
+    }
+
+    pub fn shrink_to_fit(&mut self) {
+        for sub_set in self.sub_sets.iter_mut() {
+            sub_set.shrink_to_fit();
+        }
     }
 }
 
