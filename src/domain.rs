@@ -5,6 +5,8 @@ pub struct InvalidDomain {}
 
 impl std::error::Error for InvalidDomain {}
 
+pub const DOMAIN_MAX_LENGTH: usize = 253;
+
 impl std::fmt::Display for InvalidDomain {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -16,24 +18,23 @@ pub struct Domain(Box<str>);
 
 impl Domain {
     pub fn from_str_unchecked(domain: &str) -> Self {
-        Domain(domain.to_string().into_boxed_str())
+        Self(domain.to_string().into_boxed_str())
     }
     pub fn iter_parent_domains(&self) -> impl Iterator<Item = Domain> + '_ {
-        self.0
-            .match_indices(|c| c == '.')
-            .map(move |(i, _)| self.0.split_at(i + 1).1)
-            .filter(|domain| domain.contains('.'))
-            .inspect(|domain| debug_assert!(domain.parse::<Domain>().is_ok())) // Check that all the returned parent domains would be valid
+        Self::str_iter_parent_domains(&self.0)
             .map(move |domain| Domain(domain.to_string().into_boxed_str()))
     }
-}
 
-impl FromStr for Domain {
-    type Err = InvalidDomain;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() > 253 {
-            return Err(Self::Err::default());
+    pub fn str_iter_parent_domains(s: &str) -> impl Iterator<Item = &str> + '_ {
+        s.match_indices(|c| c == '.')
+            .map(move |(i, _)| s.split_at(i + 1).1)
+            .filter(|domain| domain.contains('.'))
+            .inspect(|domain| debug_assert!(Self::str_is_valid_domain(domain).is_ok()))
+        // Check that all the returned parent domains would be valid
+    }
+    pub fn str_is_valid_domain(s: &str) -> Result<(), InvalidDomain> {
+        if s.len() > DOMAIN_MAX_LENGTH {
+            return Err(InvalidDomain::default());
         }
         let mut label_count = 0;
         for label in s.split('.') {
@@ -47,7 +48,7 @@ impl FromStr for Domain {
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
             {
-                return Err(Self::Err::default());
+                return Err(InvalidDomain::default());
             }
         }
         if label_count <= 1
@@ -57,8 +58,18 @@ impl FromStr for Domain {
                 .chars()
                 .all(|c| c == '.' || c.is_digit(10))
         {
-            return Err(Self::Err::default());
+            Err(InvalidDomain::default())
+        } else {
+            Ok(())
         }
+    }
+}
+
+impl FromStr for Domain {
+    type Err = InvalidDomain;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::str_is_valid_domain(s)?;
         Ok(Domain(s.to_ascii_lowercase().into_boxed_str()))
     }
 }
