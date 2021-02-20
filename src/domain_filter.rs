@@ -16,7 +16,6 @@ pub struct DomainFilterBuilder {
     ips: Arc<Mutex<Filter<HashSet<std::net::IpAddr>>>>,
     ip_nets: Arc<Mutex<Filter<HashSet<ipnet::IpNet>>>>,
     regexes: Arc<Mutex<Filter<HashSet<String>>>>,
-    adblock_filters: Arc<Mutex<adblock::lists::FilterSet>>,
 }
 
 impl DomainFilterBuilder {
@@ -83,16 +82,13 @@ impl DomainFilterBuilder {
         }
     }
 
-    pub fn add_adblock_rule(&self, mut rule: &str) {
+    pub fn add_adblock_rule(&self, original_rule: &str) {
+        let mut rule = original_rule;
         if rule.starts_with('!') {
             // Remove comments
             return;
         }
-        if rule.contains("##")
-            || rule.contains("#@#") // Cosmetic Exception
-            || rule.contains("#$#") // CSS Selector
-            || rule.contains("#@$#")// CSS Selector Exception
-            || rule.contains("#?#")
+        if rule.contains('#')
         // Element Hiding
         {
             return;
@@ -102,8 +98,11 @@ impl DomainFilterBuilder {
             let tags = tags
                 .trim_start_matches('$')
                 .split(',')
+                .filter(|tag| !matches!(*tag, "3p" | "third-party"))
                 .collect::<Vec<&str>>();
-            if !(tags.is_empty() || tags.contains(&"document") || tags.contains(&"all")) {
+            if !(tags.is_empty() || tags.contains(&"document") || tags.contains(&"all"))
+                || tags.iter().any(|tag| tag.starts_with("domain="))
+            {
                 return;
             }
             rule = start;
@@ -113,46 +112,74 @@ impl DomainFilterBuilder {
             .map(|rule| (rule, true))
             .unwrap_or((rule, false));
 
+        let (rule, match_start_domain, match_start_address) =
+            if let Some(rule) = rule.strip_prefix("||") {
+                (rule, true, false)
+            } else {
+                let (rule, match_start_address) = rule
+                    .strip_prefix('|')
+                    .map(|rule| (rule, true))
+                    .unwrap_or((rule, false));
+                let (rule, match_start_address) = rule
+                    .strip_prefix('*')
+                    .or_else(|| rule.strip_prefix("http"))
+                    .or_else(|| rule.strip_prefix("https"))
+                    .unwrap_or(rule)
+                    .strip_prefix("://")
+                    .map(|rule| (rule, true))
+                    .unwrap_or((rule, match_start_address));
+                (rule, false, match_start_address)
+            };
         let (rule, match_start_domain, match_start_address) = rule
-            .strip_prefix('|')
-            .map(|rule| {
-                rule.strip_prefix('|')
-                    .map(|rule| (rule, true, false))
-                    .unwrap_or((rule, false, true))
-            })
-            .unwrap_or((rule, false, false));
-        let (rule, match_start_address) = rule
-            .strip_prefix("://")
-            .or_else(|| rule.strip_prefix("*://"))
-            .or_else(|| rule.strip_prefix("http://"))
-            .or_else(|| rule.strip_prefix("https://"))
-            .map(|rule| (rule, true))
-            .unwrap_or((rule, match_start_address));
-        let (rule, match_start_domain, match_start_address) = rule
-            .strip_prefix("*.")
+            .strip_prefix('*')
+            .unwrap_or(rule)
+            .strip_prefix('.')
             .map(|rule| (rule, true, false))
             .unwrap_or((rule, match_start_domain, match_start_address));
 
         let (rule, match_end_domain) = rule
-            .strip_suffix('^')
+            .strip_suffix('|')
             .map(|rule| (rule, true))
             .unwrap_or((rule, false));
         let (rule, match_end_domain) = rule
-            .strip_suffix('|')
+            .strip_suffix(".php")
+            .or_else(|| rule.strip_suffix(".htm"))
+            .or_else(|| rule.strip_suffix(".html"))
+            .or_else(|| rule.strip_suffix(".xhtml"))
+            .unwrap_or(rule)
+            .strip_suffix('*')
+            .and_then(|rule| rule.strip_suffix('/').or(Some(rule)))
             .map(|rule| (rule, true))
             .unwrap_or((rule, match_end_domain));
         let (rule, match_end_domain) = rule
-            .strip_suffix("/*")
+            .strip_suffix('^')
             .map(|rule| (rule, true))
             .unwrap_or((rule, match_end_domain));
-
-        if rule.is_empty() || (match_start_domain && match_start_address) || rule.contains('/') {
+        let (rule, match_end_domain) = rule
+            .strip_suffix('.')
+            .map(|rule| (rule, false))
+            .unwrap_or((rule, match_end_domain));
+        if rule.is_empty()
+            || rule == "*"
+            || !rule
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '*'))
+        {
             return;
         }
 
         if (match_start_domain || match_start_address) && match_end_domain {
+            if rule.contains('*') {
+                //println!("Rule with star: {:?} Origin: {:?}", rule, original_rule);
+                return;
+            }
             if let Ok(domain) = rule.parse::<Domain>() {
-                if !is_exception {
+                if is_exception {
+                    self.add_allow_domain(domain.clone());
+                    if match_start_domain {
+                        self.add_allow_subdomain(domain);
+                    }
+                } else {
                     self.add_disallow_domain(domain.clone());
                     if match_start_domain {
                         self.add_disallow_subdomain(domain);
@@ -162,19 +189,20 @@ impl DomainFilterBuilder {
             }
             if let Ok(ip) = rule.parse::<std::net::IpAddr>() {
                 if !is_exception {
+                    // Currently no IP exception filters, so no benefit from implementing
                     self.add_disallow_ip_addr(ip);
                 }
                 return;
             }
-            //println!("Unknown filter: {:?}", rule);
+            println!("Unknown filter: {:?} Origin: {:?}", rule, original_rule);
             return;
         } else {
-            //println!("Partial domain filter: {:?}", rule);
+            /*println!(
+                "Partial domain filter: {:?}, Origin: {:?}",
+                rule, original_rule
+            );*/
             return;
         }
-
-        let mut adblock_filters = self.adblock_filters.lock().unwrap();
-        let _ = adblock_filters.add_filter(rule, adblock::lists::FilterFormat::Standard);
     }
 
     pub fn add_allow_regex(&self, re: &str) {
@@ -196,7 +224,6 @@ impl DomainFilterBuilder {
         let mut ips = std::mem::take(&mut *self.ips.lock().unwrap());
         let ip_nets = std::mem::take(&mut *self.ip_nets.lock().unwrap());
         let regexes = std::mem::take(&mut *self.regexes.lock().unwrap());
-        let adblock_filters = std::mem::take(&mut *self.adblock_filters.lock().unwrap());
 
         domains.allow.shrink_to_fit();
         domains.disallow.shrink_to_fit();
@@ -213,7 +240,6 @@ impl DomainFilterBuilder {
             subdomains,
             ips,
             ip_nets: ip_nets,
-            adblock: adblock::engine::Engine::from_filter_set(adblock_filters, true),
             allow_regex: regex::RegexSet::new(&regexes.allow).unwrap(),
             disallow_regex: regex::RegexSet::new(&regexes.disallow).unwrap(),
         }
@@ -231,27 +257,13 @@ pub struct DomainFilter {
     subdomains: Filter<DomainSet>,
     ips: Filter<HashSet<std::net::IpAddr>>,
     ip_nets: Filter<Vec<ipnet::IpNet>>,
-    adblock: adblock::engine::Engine,
     allow_regex: regex::RegexSet,
     disallow_regex: regex::RegexSet,
 }
 
 impl DomainFilter {
-    fn is_allowed_by_adblock(&self, location: &str) -> Option<bool> {
-        return None;
-        let url = format!("https://{}", location);
-        let request = adblock::request::Request::from_urls(&url, &url, "").ok()?;
-        let blocker_result = self
-            .adblock
-            .blocker
-            .check_parameterised(&request, false, true);
-        if blocker_result.exception.is_some() {
-            Some(true)
-        } else if blocker_result.matched {
-            Some(false)
-        } else {
-            None
-        }
+    fn is_allowed_by_adblock(&self, _location: &str) -> Option<bool> {
+        None
     }
 
     pub fn allowed(
@@ -339,13 +351,31 @@ fn regex_allow_overrules_regex_disallow() {
 }
 
 #[test]
-fn adblock_can_block_domain() {
+fn adblock_can_block_domain_and_subdomain() {
     let filter = DomainFilterBuilder::new();
     filter.add_adblock_rule("||example.com^");
     let filter = filter.to_domain_filter();
     assert_eq!(
         filter.domain_is_allowed(&"example.com".parse().unwrap()),
         Some(false)
+    );
+    assert_eq!(
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
+        Some(false)
+    )
+}
+#[test]
+fn adblock_does_not_block_subdomain_for_exact() {
+    let filter = DomainFilterBuilder::new();
+    filter.add_adblock_rule("|example.com^");
+    let filter = filter.to_domain_filter();
+    assert_eq!(
+        filter.domain_is_allowed(&"example.com".parse().unwrap()),
+        Some(false)
+    );
+    assert_eq!(
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
+        None
     )
 }
 
@@ -383,7 +413,7 @@ fn adblock_can_block_with_partial_domains() {
 }
 
 #[test]
-fn adblock_can_whitelist_blocked_domain() {
+fn adblock_can_whitelist_domain() {
     let filter = DomainFilterBuilder::new();
     filter.add_disallow_regex(".");
     filter.add_adblock_rule("@@||example.com^");
@@ -391,6 +421,40 @@ fn adblock_can_whitelist_blocked_domain() {
     assert_eq!(
         filter.domain_is_allowed(&"example.com".parse().unwrap()),
         Some(true)
+    );
+    assert_eq!(
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
+        Some(true)
+    )
+}
+
+#[test]
+fn adblock_does_not_whitelist_domain_for_exact() {
+    let filter = DomainFilterBuilder::new();
+    filter.add_adblock_rule("@@|example.com^");
+    let filter = filter.to_domain_filter();
+    assert_eq!(
+        filter.domain_is_allowed(&"example.com".parse().unwrap()),
+        Some(true)
+    );
+    assert_eq!(
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
+        None
+    )
+}
+
+#[test]
+fn adblock_third_party_does_block_domain() {
+    let filter = DomainFilterBuilder::new();
+    filter.add_adblock_rule("||example.com^$third-party");
+    let filter = filter.to_domain_filter();
+    assert_eq!(
+        filter.domain_is_allowed(&"example.com".parse().unwrap()),
+        Some(false)
+    );
+    assert_eq!(
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
+        Some(false)
     )
 }
 
@@ -400,7 +464,7 @@ fn subdomain_disallow_blocks() {
     filter.add_disallow_subdomain("example.com".parse().unwrap());
     let filter = filter.to_domain_filter();
     assert_eq!(
-        filter.domain_is_allowed(&"www.example.com".parse().unwrap()),
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
         Some(false)
     )
 }
@@ -412,7 +476,7 @@ fn subdomain_allow_whitelists_domains() {
     filter.add_allow_subdomain("example.com".parse().unwrap());
     let filter = filter.to_domain_filter();
     assert_eq!(
-        filter.domain_is_allowed(&"www.example.com".parse().unwrap()),
+        filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
         Some(true)
     )
 }
@@ -459,6 +523,21 @@ fn blocked_ip_blocks_base() {
 }
 
 #[test]
+fn blocked_ip_net_blocks_base() {
+    let filter = DomainFilterBuilder::new();
+    filter.add_disallow_ip_subnet("8.8.8.0/24".parse().unwrap());
+    let filter = filter.to_domain_filter();
+    assert_eq!(
+        filter.allowed(
+            &"example.com".parse().unwrap(),
+            &[],
+            &["8.8.8.8".parse().unwrap()]
+        ),
+        Some(false)
+    )
+}
+
+#[test]
 fn ignores_allowed_ips() {
     let filter = DomainFilterBuilder::new();
     filter.add_disallow_domain("example.com".parse().unwrap());
@@ -485,21 +564,6 @@ fn unblocked_ips_do_not_allow() {
             &[],
             &["8.8.8.8".parse().unwrap()]
         ),
-        None
-    )
-}
-
-#[test]
-fn adblock_third_party_does_not_block_domain() {
-    let filter = DomainFilterBuilder::new();
-    filter.add_adblock_rule("||example.com$third-party");
-    let filter = filter.to_domain_filter();
-    assert_eq!(
-        filter.domain_is_allowed(&"example.com".parse().unwrap()),
-        None
-    );
-    assert_eq!(
-        filter.domain_is_allowed(&"www.example.com".parse().unwrap()),
         None
     )
 }

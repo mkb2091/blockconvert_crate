@@ -1,7 +1,7 @@
 [package]
 name = "blockconvert"
 description = "Import multiple domain filterlist types and determine whether to block a domain"
-version = "0.3.0"
+version = "0.3.2"
 authors = ["Alex Williams <mkb2191@protonmail.com>"]
 edition = "2018"
 repository = "https://github.com/mkb2091/blockconvert_crate"
@@ -11,7 +11,6 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-adblock = {version = "0.3", default-features = false, features = ["full-regex-handling", "embedded-domain-resolver"]}
-regex = "1.3"
+regex = {version = "1.4", features = ["std", "perf"]}
 ipnet = "2.3"
 fxhash = "0.2"
