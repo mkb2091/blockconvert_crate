@@ -52,7 +52,7 @@ impl<T: std::hash::BuildHasher> DomainSetSharded<T> {
     }
 
     pub fn contains(&self, data: &[u8]) -> bool {
-        assert!(data.len() < DOMAIN_MAX_LENGTH);
+        assert!(data.len() <= DOMAIN_MAX_LENGTH);
         self.shards[self.get_location(data)].lock().contains(data)
     }
     pub fn contains_str(&self, data: &str) -> bool {
@@ -60,7 +60,7 @@ impl<T: std::hash::BuildHasher> DomainSetSharded<T> {
     }
 
     pub fn insert(&self, data: &[u8]) -> bool {
-        assert!(data.len() < DOMAIN_MAX_LENGTH);
+        assert!(data.len() <= DOMAIN_MAX_LENGTH);
         self.shards[self.get_location(data)].lock().insert(data)
     }
     pub fn insert_str(&self, data: &str) -> bool {
@@ -68,7 +68,7 @@ impl<T: std::hash::BuildHasher> DomainSetSharded<T> {
     }
 
     pub fn remove(&self, data: &[u8]) -> bool {
-        assert!(data.len() < DOMAIN_MAX_LENGTH);
+        assert!(data.len() <= DOMAIN_MAX_LENGTH);
         self.shards[self.get_location(data)].lock().remove(data)
     }
     pub fn remove_str(&self, data: &str) -> bool {

@@ -33,7 +33,7 @@ impl Domain {
         // Check that all the returned parent domains would be valid
     }
     pub fn str_is_valid_domain(s: &str) -> Result<(), InvalidDomain> {
-        if s.len() > DOMAIN_MAX_LENGTH {
+        if s.as_bytes().len() > DOMAIN_MAX_LENGTH {
             return Err(InvalidDomain::default());
         }
         let mut label_count = 0;
