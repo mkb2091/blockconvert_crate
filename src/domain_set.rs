@@ -182,6 +182,8 @@ impl Iterator for DomainSetIntoIter {
                 self.index += 1;
                 Some(result)
             } else {
+                drop(subset);
+                self.domain_set.subsets[self.subset] = Vec::new();
                 self.subset += 1;
                 self.index = 0;
                 self.next()
@@ -292,6 +294,9 @@ impl DomainSet {
                 .splice(index * len..(index + 1) * len, std::iter::empty())
                 .collect();
             assert_eq!(removed.len(), len);
+            if subset.len() * 2 < subset.capacity() {
+                subset.shrink_to_fit();
+            }
             true
         } else {
             false
@@ -306,7 +311,8 @@ impl DomainSet {
         DomainSetIter::new(self)
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = Vec<u8>> {
+    pub fn into_iter(mut self) -> impl Iterator<Item = Vec<u8>> {
+        self.shrink_to_fit();
         DomainSetIntoIter::new(self)
     }
     pub fn into_iter_string(self) -> impl Iterator<Item = String> {
@@ -347,7 +353,7 @@ mod tests {
     #[quickcheck]
     fn test_sharded_into_iter_string_is_original(mut strings: Vec<String>) {
         let set = DomainSetSharded::default();
-        strings.retain(|string| string.len() < DOMAIN_MAX_LENGTH);
+        strings.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in strings.iter() {
             set.insert_str(&domain);
         }
@@ -361,7 +367,7 @@ mod tests {
     #[quickcheck]
     fn test_domain_set_into_iter_string_is_original(mut strings: Vec<String>) {
         let mut set = DomainSet::default();
-        strings.retain(|string| string.len() < DOMAIN_MAX_LENGTH);
+        strings.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in strings.iter() {
             set.insert_str(&domain);
         }
@@ -375,7 +381,7 @@ mod tests {
     #[quickcheck]
     fn test_into_iter_is_original(mut slices: Vec<Vec<u8>>) {
         let set = DomainSetSharded::default();
-        slices.retain(|string| string.len() < DOMAIN_MAX_LENGTH);
+        slices.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in slices.iter() {
             set.insert(&domain);
         }
@@ -389,7 +395,7 @@ mod tests {
     #[quickcheck]
     fn test_domain_set_iter_is_original(mut slices: Vec<Vec<u8>>) {
         let mut set = DomainSet::default();
-        slices.retain(|string| string.len() < DOMAIN_MAX_LENGTH);
+        slices.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in slices.iter() {
             set.insert(&domain);
         }
