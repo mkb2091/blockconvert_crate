@@ -295,9 +295,7 @@ impl DomainFilterBuilder {
 }
 
 fn is_subdomain_of_list(domain: &Domain, filter_list: &DomainSetShardedDefault) -> bool {
-    domain
-        .iter_parent_domains()
-        .any(|part| filter_list.contains_str(&part))
+    Domain::str_iter_parent_domains(domain).any(|part| filter_list.contains_str(part))
 }
 
 pub struct DomainFilter {
