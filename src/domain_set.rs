@@ -198,6 +198,7 @@ impl Iterator for DomainSetIntoIter {
 pub struct DomainSet {
     subsets: [Vec<u8>; DOMAIN_MAX_LENGTH],
     has_empty_string: bool,
+    length: usize,
 }
 
 impl Default for DomainSet {
@@ -216,6 +217,7 @@ impl DomainSet {
         Self {
             subsets: unsafe { std::mem::transmute::<_, _>(subsets) },
             has_empty_string: false,
+            length: 0,
         }
     }
     fn find_index(&self, data: &[u8]) -> Result<usize, usize> {
@@ -266,13 +268,17 @@ impl DomainSet {
         if len == 0 {
             let old = self.has_empty_string;
             self.has_empty_string = true;
-            !self.has_empty_string
+            if !old {
+                self.length += 1;
+            }
+            !old
         } else if let Err(index) = self.find_index(data) {
             let subset = &mut self.subsets[len - 1];
             let removed: Vec<_> = subset
                 .splice(index * len..index * len, data.iter().cloned())
                 .collect();
             assert_eq!(removed.len(), 0);
+            self.length += 1;
             true
         } else {
             false
@@ -287,6 +293,9 @@ impl DomainSet {
         if len == 0 {
             let old = self.has_empty_string;
             self.has_empty_string = false;
+            if self.has_empty_string {
+                self.length -= 1;
+            }
             self.has_empty_string
         } else if let Ok(index) = self.find_index(data) {
             let subset = &mut self.subsets[len - 1];
@@ -294,8 +303,11 @@ impl DomainSet {
                 .splice(index * len..(index + 1) * len, std::iter::empty())
                 .collect();
             assert_eq!(removed.len(), len);
-            if subset.len() * 2 < subset.capacity() {
-                subset.shrink_to_fit();
+            self.length -= 1;
+            if subset.len() == 0 {
+                *subset = Vec::new();
+            } else if subset.len() * 4 < subset.capacity() {
+                //subset.shrink_to_fit();
             }
             true
         } else {
@@ -326,23 +338,33 @@ impl DomainSet {
     }
 
     pub fn shrink_to_fit(&mut self) {
-        for subset in self.subsets.iter_mut() {
-            subset.shrink_to_fit();
+        if self.length != 0 {
+            for subset in self.subsets.iter_mut() {
+                subset.shrink_to_fit();
+            }
         }
     }
 
     pub fn len(&self) -> usize {
-        self.has_empty_string as usize
-            + self
-                .subsets
-                .iter()
-                .enumerate()
-                .map(|(len, subset)| subset.len() / (len + 1))
-                .sum::<usize>()
+        debug_assert_eq!(
+            self.length,
+            self.has_empty_string as usize
+                + self
+                    .subsets
+                    .iter()
+                    .enumerate()
+                    .map(|(len, subset)| subset.len() / (len + 1))
+                    .sum::<usize>()
+        );
+        self.length
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.has_empty_string && self.subsets.iter().all(|subset| subset.is_empty())
+        debug_assert_eq!(
+            self.length == 0,
+            !self.has_empty_string && self.subsets.iter().all(|subset| subset.is_empty()),
+        );
+        self.length == 0
     }
 }
 

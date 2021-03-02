@@ -4,6 +4,8 @@ extern crate quickcheck;
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
+pub use ipnet;
+
 mod domain;
 pub use domain::Domain;
 
