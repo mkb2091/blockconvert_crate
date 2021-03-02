@@ -20,12 +20,12 @@ impl Domain {
     pub fn from_str_unchecked(domain: &str) -> Self {
         Self(domain.to_string().into_boxed_str())
     }
-    pub fn iter_parent_domains(&self) -> impl Iterator<Item = Domain> + '_ {
+    pub fn iter_parent_domains(&self) -> impl DoubleEndedIterator<Item = Domain> + '_ {
         Self::str_iter_parent_domains(&self.0)
             .map(move |domain| Domain(domain.to_string().into_boxed_str()))
     }
 
-    pub fn str_iter_parent_domains(s: &str) -> impl Iterator<Item = &str> + '_ {
+    pub fn str_iter_parent_domains(s: &str) -> impl DoubleEndedIterator<Item = &str> + '_ {
         s.match_indices(|c| c == '.')
             .map(move |(i, _)| s.split_at(i + 1).1)
             .filter(|domain| domain.contains('.'))
