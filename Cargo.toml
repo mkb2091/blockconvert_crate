@@ -1,7 +1,7 @@
 [package]
 name = "blockconvert"
 description = "Import multiple domain filterlist types and determine whether to block a domain"
-version = "0.4.5"
+version = "0.5.0"
 authors = ["Alex Williams <mkb2191@protonmail.com>"]
 edition = "2018"
 repository = "https://github.com/mkb2091/blockconvert_crate"
@@ -13,7 +13,6 @@ readme = "README.md"
 [dependencies]
 regex = {version = "1.4", features = ["std", "perf"]}
 ipnet = "2.3"
-fxhash = "0.2"
 parking_lot = "0.11"
 
 [dev-dependencies]

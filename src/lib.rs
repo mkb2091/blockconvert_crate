@@ -13,4 +13,4 @@ mod domain_set;
 pub use domain_set::{DomainSet, DomainSetSharded, DomainSetShardedDefault};
 
 mod domain_filter;
-pub use domain_filter::{DomainFilter, DomainFilterBuilder};
+pub use domain_filter::{DefaultDomainFilterBuilder, DomainFilter, DomainFilterBuilder};

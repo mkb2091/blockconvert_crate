@@ -1,10 +1,5 @@
-use fxhash::FxHashMap;
-use fxhash::FxHashSet;
-
 use crate::domain::DOMAIN_MAX_LENGTH;
 use crate::Domain;
-
-use std::sync::Arc;
 
 use std::hash::{Hash, Hasher};
 
@@ -15,24 +10,23 @@ type DefaultHasher = std::collections::hash_map::RandomState;
 
 pub type DomainSetShardedDefault = DomainSetSharded<DefaultHasher>;
 
-#[derive(Clone)]
 pub struct DomainSetSharded<H: std::hash::BuildHasher> {
-    shards: Vec<Arc<Mutex<DomainSet>>>,
+    shards: Vec<Mutex<DomainSet>>,
     hasher: H,
 }
 
-impl Default for DomainSetSharded<DefaultHasher> {
-    fn default() -> Self {
-        Self::new()
+impl<H: std::hash::BuildHasher + Default> DomainSetSharded<H> {
+    pub fn new() -> Self {
+        Self::with_shards_and_hasher(DEFAULT_SHARDS, H::default())
+    }
+    pub fn with_shards(shard_count: usize) -> Self {
+        Self::with_shards_and_hasher(shard_count, H::default())
     }
 }
 
-impl DomainSetSharded<DefaultHasher> {
-    pub fn new() -> Self {
-        Self::with_shards_and_hasher(DEFAULT_SHARDS, DefaultHasher::new())
-    }
-    pub fn with_shards(shard_count: usize) -> Self {
-        Self::with_shards_and_hasher(shard_count, DefaultHasher::new())
+impl<H: std::hash::BuildHasher + Default> Default for DomainSetSharded<H> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -40,7 +34,7 @@ impl<T: std::hash::BuildHasher> DomainSetSharded<T> {
     pub fn with_shards_and_hasher(shard_count: usize, hasher: T) -> Self {
         let mut shards = Vec::with_capacity(shard_count);
         for _ in 0..shard_count {
-            shards.push(Arc::new(Mutex::new(DomainSet::new())));
+            shards.push(Mutex::new(DomainSet::new()));
         }
         Self { shards, hasher }
     }
@@ -296,7 +290,7 @@ impl DomainSet {
             if self.has_empty_string {
                 self.length -= 1;
             }
-            self.has_empty_string
+            old
         } else if let Ok(index) = self.find_index(data) {
             let subset = &mut self.subsets[len - 1];
             let removed: Vec<_> = subset
@@ -374,7 +368,7 @@ mod tests {
 
     #[quickcheck]
     fn test_sharded_into_iter_string_is_original(mut strings: Vec<String>) {
-        let set = DomainSetSharded::default();
+        let set = DomainSetShardedDefault::default();
         strings.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in strings.iter() {
             set.insert_str(&domain);
@@ -402,7 +396,7 @@ mod tests {
 
     #[quickcheck]
     fn test_into_iter_is_original(mut slices: Vec<Vec<u8>>) {
-        let set = DomainSetSharded::default();
+        let set = DomainSetShardedDefault::default();
         slices.retain(|string| string.len() <= DOMAIN_MAX_LENGTH);
         for domain in slices.iter() {
             set.insert(&domain);
@@ -432,7 +426,7 @@ mod tests {
     fn test_domain_set_can_have_elements_removed() {
         let mut domains = vec!["google.com", "en.m.wikipedia.org", "example.tk"];
         domains.sort();
-        let set = DomainSetSharded::default();
+        let set = DomainSetShardedDefault::default();
         for domain in domains.iter() {
             set.insert_str(&domain);
         }
@@ -464,7 +458,7 @@ mod tests {
             "example.com",
         ];
         domains.sort();
-        let set = DomainSetSharded::default();
+        let set = DomainSetShardedDefault::default();
         for (i, domain) in domains.iter().enumerate() {
             assert_eq!(set.contains_str(&domain), false);
             assert_eq!(set.len(), i);
@@ -485,7 +479,7 @@ mod tests {
             "example.tk",
             "google.com",
         ];
-        let set = DomainSetSharded::default();
+        let set = DomainSetShardedDefault::default();
         for domain in domains.iter() {
             set.insert_str(&domain);
         }
