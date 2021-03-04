@@ -25,6 +25,10 @@ impl Domain {
             .map(move |domain| Domain(domain.to_string().into_boxed_str()))
     }
 
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
     pub fn str_iter_parent_domains(s: &str) -> impl DoubleEndedIterator<Item = &str> + '_ {
         s.match_indices(|c| c == '.')
             .map(move |(i, _)| s.split_at(i + 1).1)
