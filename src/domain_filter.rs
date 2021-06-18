@@ -102,8 +102,8 @@ impl FromStr for AdblockFilter {
                     .unwrap_or((rule, false));
                 let (rule, match_start_address) = rule
                     .strip_prefix('*')
-                    .or_else(|| rule.strip_prefix("http"))
                     .or_else(|| rule.strip_prefix("https"))
+                    .or_else(|| rule.strip_prefix("http"))
                     .unwrap_or(rule)
                     .strip_prefix("://")
                     .map(|rule| (rule, true))
@@ -553,6 +553,17 @@ fn adblock_third_party_does_block_domain() {
         filter.domain_is_allowed(&"example_subdomain.example.com".parse().unwrap()),
         Some(false)
     )
+}
+
+#[test]
+fn adblock_https_does_block_domain() {
+    let filter = DefaultDomainFilterBuilder::new();
+    filter.add_adblock_rule("https://r.i.ua^");
+    let filter = filter.to_domain_filter();
+    assert_eq!(
+        filter.domain_is_allowed(&"r.i.ua".parse().unwrap()),
+        Some(false)
+    );
 }
 
 #[test]
